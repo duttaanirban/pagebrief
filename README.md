@@ -5,7 +5,7 @@ A full-stack app that fetches a public webpage, extracts its main HTML text, and
 ## Submission links
 
 - Public source: https://github.com/duttaanirban/pagebrief
-- The deployed URL will be added after hosting succeeds.
+- Live app: https://pagebrief-ai-scraper.pastelmule2.chatgpt.site
 
 ## Stack
 
