@@ -1,64 +1,187 @@
 # Pagebrief — AI Web Scraper
 
-A full-stack app that fetches a public webpage, extracts its main HTML text, and returns a short AI summary using **Groq's free API plan**. No paid OpenAI API key is used.
+Paste a public webpage URL to get a short AI summary. The **React/Vite frontend** and **Node/Express backend** are independent projects. Deploy the frontend on **Vercel** and the backend on **Render**. Summaries use a server-side Groq key on its free plan; no paid OpenAI API key is used.
 
-## Submission links
+Public repository: https://github.com/duttaanirban/pagebrief
 
-- Public source: https://github.com/duttaanirban/pagebrief
-- Live app: https://pagebrief-ai-scraper.pastelmule2.chatgpt.site
+## Folder structure
 
-## Stack
+```text
+pagebrief/
+├── frontend/                 # React UI → Vercel
+│   ├── src/
+│   ├── public/
+│   ├── .env.example
+│   ├── package.json
+│   ├── package-lock.json
+│   └── vercel.json
+├── backend/                  # Express API → Render
+│   ├── src/
+│   ├── tests/
+│   ├── .env.example
+│   ├── package.json
+│   └── package-lock.json
+├── render.yaml               # Optional Render Blueprint
+├── package.json              # Convenience commands only
+└── README.md
+```
 
-React 19 and TypeScript for the frontend, Next.js App Router conventions running on Cloudflare's Vinext, an HTTP API route for the backend, Cheerio for HTML extraction, and Groq for summarization. Frontend and backend run in one process and deploy together as a Cloudflare Worker through Sites. No database is needed.
+The source has been migrated from the earlier combined Cloudflare app. The new Vercel/Render version requires the manual deployments below; its new live URLs are not assigned yet.
 
-## Run locally (frontend and backend)
+## Run locally
 
-Prerequisites: Node.js **22.13 or newer**, npm, and a free Groq account.
+Install Node.js **22.13 or newer**. Clone this repository, then use **two terminals**. On Windows PowerShell, use `npm.cmd` instead of `npm` if execution policy blocks the npm shim.
+
+### Terminal 1: backend
 
 ```sh
-git clone https://github.com/duttaanirban/pagebrief.git
-cd pagebrief
+cd pagebrief/backend
 npm ci
 ```
 
-Create **`.env` in the repository root**, beside `package.json`. Copy `.env.example`:
+Copy `backend/.env.example` to **`backend/.env`**, beside the backend's `package.json`:
 
 ```sh
-# macOS / Linux
+# macOS/Linux, from backend/
 cp .env.example .env
 ```
 
 ```powershell
-# Windows PowerShell
+# Windows PowerShell, from backend/
 Copy-Item .env.example .env
 ```
 
-Get a free key at https://console.groq.com/keys and edit `.env`:
+Edit `backend/.env`:
 
 ```dotenv
-GROQ_API_KEY=your_groq_api_key_here
+GROQ_API_KEY=your_groq_key_here
 GROQ_MODEL=qwen/qwen3.8-27b
+PORT=3001
+FRONTEND_URL=http://localhost:5173,http://127.0.0.1:5173
 ```
 
-Keep your Groq account on its free plan. Models and quotas can change; select a model enabled on your account from https://console.groq.com/docs/rate-limits. `GROQ_MODEL` is optional and defaults to the model above. The key remains on the server. Never put it in a `NEXT_PUBLIC_` variable or commit `.env`.
+Get a free key at https://console.groq.com/keys. Keep the account on its free plan. Models and quotas can change; choose an enabled model from https://console.groq.com/docs/rate-limits. `GROQ_MODEL` is optional and defaults to the value above.
 
 ```sh
 npm run dev
 ```
 
-Open **http://127.0.0.1:5173**. This command starts **both the React frontend and the backend API**. There is no separate backend command or CORS setup. Restart the server after changing `.env`. If PowerShell blocks npm's script shim, use `npm.cmd ci` and `npm.cmd run dev` instead.
+The backend listens on **http://localhost:3001**. Open **http://localhost:3001/health** to check it; it returns `{"status":"ok"}`. The existing local API key was moved into `backend/.env` during the migration. Do not create a root `.env` or put the key in the frontend.
 
-Paste a public HTTP/HTTPS URL and select **Summarize**. The button shows **Loading…** while the backend fetches the page and calls Groq. The result includes the page title, source link, summary, and extracted word count. Failures appear inline and preserve the URL so you can retry.
+### Terminal 2: frontend
 
-## API
+```sh
+cd pagebrief/frontend
+npm ci
+```
 
-`POST /api/summarize`, with `Content-Type: application/json`:
+Copy `frontend/.env.example` to **`frontend/.env`** using `cp .env.example .env` or PowerShell's `Copy-Item .env.example .env`.
+
+```dotenv
+VITE_API_URL=http://localhost:3001
+```
+
+```sh
+npm run dev
+```
+
+Open **http://localhost:5173**, paste a public URL, and click **Summarize**. Restart the corresponding server after changing its `.env`.
+
+`VITE_API_URL` is the backend **origin**, without `/api/summarize` or a trailing slash. This URL is public browser configuration. **Never put `GROQ_API_KEY` in a `VITE_` variable**: those values are bundled into the frontend.
+
+## Manual deployment: Vercel + Render
+
+Use the same GitHub repository for both services. Each provider builds only its selected folder. No Cloudflare setup is needed.
+
+### 1. Create the frontend on Vercel
+
+1. Sign in at https://vercel.com/new and import **duttaanirban/pagebrief**.
+2. Set **Root Directory** to **`frontend`**.
+3. Set **Framework Preset** to **Vite**.
+4. Use **Install Command** `npm ci`, **Build Command** `npm run build`, and **Output Directory** `dist`. The included `frontend/vercel.json` sets these commands.
+5. Deploy, then copy its stable production URL, for example `https://your-project.vercel.app`. This first deploy displays the UI; summaries connect after step 3 below.
+
+Use the production domain shown by your actual Vercel project; the example URL is not an existing deployment.
+
+### 2. Create the backend on Render
+
+1. Sign in at https://dashboard.render.com and choose **New → Web Service**.
+2. Connect the same **duttaanirban/pagebrief** GitHub repository and select branch **main**.
+3. Enter these settings:
+
+| Render setting | Value |
+| --- | --- |
+| Root Directory | `backend` |
+| Runtime / Language | Node |
+| Build Command | `npm ci --include=dev && npm run build` |
+| Start Command | `npm start` |
+| Instance Type | Free |
+| Health Check Path | `/health` |
+
+4. Add environment variables in Render:
+
+| Variable | Value |
+| --- | --- |
+| `NODE_VERSION` | `22.14.0` or a newer supported Node 22 release |
+| `NODE_ENV` | `production` |
+| `GROQ_API_KEY` | Your free Groq API key |
+| `GROQ_MODEL` | `qwen/qwen3.8-27b` (or another model enabled on your free account) |
+| `FRONTEND_URL` | Your actual Vercel production origin, e.g. `https://your-project.vercel.app` |
+
+Render provides `PORT` automatically. The backend binds to `0.0.0.0` and uses that port. Do not upload `.env`: set values in Render's dashboard.
+
+5. Deploy. Copy the actual backend URL assigned by Render, for example `https://your-backend.onrender.com`.
+6. Visit `https://your-backend.onrender.com/health` and check for `{"status":"ok"}`.
+
+Alternatively, use **New → Blueprint** with this repository. The root `render.yaml` contains the same backend settings and prompts for `GROQ_API_KEY` and `FRONTEND_URL`. It creates only the backend on Render; Vercel still hosts the frontend.
+
+### 3. Connect Vercel to Render
+
+1. In Vercel, open **Project → Settings → Environment Variables**.
+2. Add **`VITE_API_URL`** with your actual Render backend origin, for example `https://your-backend.onrender.com`. Enable it for **Production**.
+3. **Redeploy the frontend** from the Deployments tab. Vite reads this variable at build time, so adding it after a build does not change an already deployed bundle.
+4. Open the Vercel production URL and summarize `https://example.com`.
+
+Keep `FRONTEND_URL` on Render exactly equal to the browser's Vercel origin (scheme and hostname, no path or trailing slash). You may list multiple trusted origins separated by commas. A Vercel preview uses a different origin; explicitly add it to Render if you need to test that preview. Do not use a wildcard CORS origin.
+
+### Troubleshooting deployment
+
+- **Cannot reach the summary server:** verify `VITE_API_URL`, redeploy Vercel after changing it, and open Render's `/health` URL. Render's free backend can sleep when idle and may need time to start; the UI waits up to two minutes.
+- **Frontend origin is not allowed / CORS error:** update Render's `FRONTEND_URL` to the exact Vercel domain you're viewing, then let Render restart/redeploy.
+- **Summaries aren't configured:** set `GROQ_API_KEY` on **Render**, not Vercel.
+- **AI quota exhausted:** wait for the free quota to reset. No paid fallback is used.
+- **Build cannot find package.json:** ensure the provider's root is `frontend` or `backend`, not `pagebrief/frontend` or `pagebrief/backend`. The GitHub repository itself is already the `pagebrief` project root.
+
+Provider references: [Vite on Vercel](https://vercel.com/docs/frameworks/frontend/vite), [Node/Express on Render](https://render.com/docs/deploy-node-express-app), [Render free service behavior](https://render.com/docs/free).
+
+## Build and test
+
+From `frontend/`:
+
+```sh
+npm run build
+npm run preview
+```
+
+From `backend/`:
+
+```sh
+npm test
+npm run build
+npm start
+```
+
+Each folder has its own lockfile and can be installed, tested, and deployed independently. Root convenience commands are also available: `npm run install:all`, `npm run dev:frontend`, `npm run dev:backend`, `npm run build`, and `npm test`.
+
+## API and implementation
+
+`POST /api/summarize` with `Content-Type: application/json`:
 
 ```json
 {"url":"https://example.com"}
 ```
 
-Successful response:
+Response:
 
 ```json
 {
@@ -70,51 +193,6 @@ Successful response:
 }
 ```
 
-Errors return a JSON `error` string and an appropriate HTTP status: 400 for invalid input, 415 for an incorrect request content type, 422 for unsupported/empty pages, 429 for rate limits, 503 for missing/invalid API configuration, and 502/504 for upstream failures/timeouts.
+The backend fetches basic HTML, prefers article/main content, removes page chrome, and sends up to 16,000 characters to Groq. It rejects private/local addresses, credentials, custom ports, unsafe redirects, oversized responses, and non-HTML files. Outbound sockets are pinned to validated public IPs to prevent DNS rebinding. Limits include a 15-second fetch deadline, 35-second AI timeout, 2 MB decoded page size, five API requests per minute per client, and four concurrent summaries per process. In-memory rate limits reset on process restart and are not distributed.
 
-## Checks and production build
-
-```sh
-npm test
-npm run typecheck
-npm run lint
-npm run build
-npm start
-```
-
-`npm start` serves the built frontend and backend locally through Wrangler; use the localhost URL printed in the terminal. Tests use mocked external requests, so they need no AI key and consume no quota. Tests cover article extraction, private network URLs and DNS, unsafe redirects, payload limits, non-HTML pages, and AI responses/quota errors.
-
-## Deploy
-
-The app targets **Cloudflare Workers**, not a static-only host. Both UI and API must be deployed. Sites hosting builds the Worker and manages the production environment. Set **`GROQ_API_KEY` as a secret** and optionally `GROQ_MODEL` in the hosting project's runtime environment, then deploy the build. Local `.env` is ignored and is never part of the deployment archive. The `.openai/hosting.json` identifies the existing Sites project.
-
-For direct Cloudflare hosting instead, run `npm run build` and deploy the generated Worker:
-
-```sh
-npx wrangler deploy --config dist/server/wrangler.json
-npx wrangler secret put GROQ_API_KEY --config dist/server/wrangler.json
-```
-
-Wrangler requires a Cloudflare login (`npx wrangler login`) and a unique Worker name in the generated config if its default is already taken. Use your account's Workers free plan. Record the URL printed by deployment. The default model is built into the backend; if you change it, add `GROQ_MODEL` as a Worker runtime variable/secret. Do not deploy just `dist/client`, because it does not contain the backend.
-
-## How it works and limits
-
-1. Validate a URL and resolve its A/AAAA DNS records. Reject credentials, custom ports, local/private IPs, and private DNS answers.
-2. Fetch HTML with a 15-second timeout and a 2 MB decoded response limit. Follow up to four redirects, validating every destination.
-3. Prefer `article`, then `main`, then the body. Remove scripts, navigation, forms, headers, footers, and other page chrome. Send up to 16,000 characters to AI; the UI marks truncated input.
-4. Ask Groq for a short factual plain-text summary with a 35-second timeout. Render text safely through React, without injecting HTML.
-
-Basic server throttling permits five requests per minute per IP and four concurrent requests per Worker instance. These in-memory limits are best-effort and reset on restart; they are not a distributed quota system. Groq also enforces free-plan limits. The scraper does not execute JavaScript, bypass bot protections, access sign-in pages, or extract PDFs. Page content is sent to Groq for processing. AI summaries can miss details.
-
-DNS validation and the outbound fetch are separate operations; Cloudflare Workers network isolation is part of the deployment design. Keep the backend on Workers rather than moving it unchanged to a server with access to a sensitive local network.
-
-## Relevant files
-
-- `app/page.tsx`: URL form, loading/error states, summary rendering.
-- `app/globals.css`: responsive styling.
-- `app/api/summarize/route.ts`: backend endpoint, key handling and throttling.
-- `lib/scraper.ts`: URL/DNS validation, HTML extraction, Groq integration.
-- `.env.example`: server environment template.
-- `tests/scraper.test.mjs`: automated behavior checks.
-
-The repository also retains Sites starter build scripts and components; unused database examples are not used by this app.
+The UI shows loading, error, and summary states and renders results as text. Scraping does not execute JavaScript or bypass bot protection. Content is sent to Groq; AI can miss details, so check the original source. Tests cover scraping, DNS/address validation, HTML limits, Groq errors, actual HTTP endpoints, CORS/preflight requests, malformed JSON, and throttling without using AI quota.
